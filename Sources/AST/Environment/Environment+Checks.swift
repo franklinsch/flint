@@ -7,10 +7,16 @@
 import Source
 
 extension Environment {
-  /// The prefix for Flint runtime functions.
-  public static var runtimeFunctionPrefix = "flint$"
+  /// The prefix for IR function calls.
+  public static var irFunctionPrefix = "ir$"
+  // The prefix for runtime calls.
+  public static var runtimeFunctionPrefix = "runtime$"
 
   /// Whether the given function call is a runtime function.
+  public static func isIRFunctionCall(_ functionCall: FunctionCall) -> Bool {
+    return functionCall.identifier.name.starts(with: irFunctionPrefix)
+  }
+
   public static func isRuntimeFunctionCall(_ functionCall: FunctionCall) -> Bool {
     return functionCall.identifier.name.starts(with: runtimeFunctionPrefix)
   }
@@ -92,7 +98,7 @@ extension Environment {
   private func isRedeclaration(_ identifier1: Identifier, _ identifier2: Identifier) -> Bool {
     return identifier1 != identifier2 &&
       identifier1.name == identifier2.name &&
-      identifier1.sourceLocation.line < identifier2.sourceLocation.line
+      identifier1.sourceLocation < identifier2.sourceLocation
   }
 
   // Whether declarations conflict

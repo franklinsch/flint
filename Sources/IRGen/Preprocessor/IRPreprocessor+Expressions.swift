@@ -102,7 +102,13 @@ extension IRPreprocessor {
     let scopeContext = passContext.scopeContext!
 
     guard !Environment.isRuntimeFunctionCall(functionCall) else {
+      // Don't process runtime functions.
+      return ASTPassResult(element: functionCall, diagnostics: [], passContext: passContext)
+    }
+
+    guard !Environment.isIRFunctionCall(functionCall) else {
       // Don't further process runtime functions.
+      functionCall.mangledIdentifier = mangledFunctionName(for: functionCall, in: passContext)
       return ASTPassResult(element: functionCall, diagnostics: [], passContext: passContext)
     }
 
@@ -133,14 +139,16 @@ extension IRPreprocessor {
       // Set the mangled identifier for the function.
       functionCall.mangledIdentifier = mangledFunctionName(for: functionCall, in: passContext)
 
-      // If it returns a dynamic type, pass the receiver as the first parameter.
-      if passContext.environment!.isStructDeclared(declarationEnclosingType) {
-        if !isGlobalFunctionCall {
+
+
+      // If it returns a dynamic type (a non-global initalised struct), pass the receiver as the first parameter.
+      if passContext.environment!.isStructDeclared(declarationEnclosingType),
+        !isGlobalFunctionCall,
+        !environment.initializers(in: declarationEnclosingType).isEmpty {
           let receiver = constructExpression(from: receiverTrail)
           let inoutExpression = InoutExpression(ampersandToken: Token(kind: .punctuation(.ampersand), sourceLocation: receiver.sourceLocation), expression: receiver)
           functionCall.arguments.insert(FunctionArgument(.inoutExpression(inoutExpression)), at: 0)
         }
-      }
     }
 
     guard case .failure(let candidates) = environment.matchEventCall(functionCall, enclosingType: enclosingType, scopeContext: passContext.scopeContext ?? ScopeContext()), candidates.isEmpty else {
@@ -183,9 +191,13 @@ extension IRPreprocessor {
   }
 
   func mangledFunctionName(for functionCall: FunctionCall, in passContext: ASTPassContext) -> String? {
-    // Don't mangle runtime functions
+    // Don't mangle runtime calls
     guard !Environment.isRuntimeFunctionCall(functionCall) else {
       return functionCall.identifier.name
+    }
+    // Only strip function prefix from ir calls
+    guard !Environment.isIRFunctionCall(functionCall) else {
+      return functionCall.identifier.name.replacingOccurrences(of: Environment.irFunctionPrefix, with: "")
     }
 
     let environment = passContext.environment!

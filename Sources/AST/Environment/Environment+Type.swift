@@ -7,22 +7,37 @@
 import Lexer
 
 extension Environment {
-  /// The type of a property in the given enclosing type or in a scope if it is a local variable.
-  public func type(of property: String, enclosingType: RawTypeIdentifier, scopeContext: ScopeContext? = nil) -> RawType {
-    if let type = types[enclosingType]?.properties[property]?.rawType {
+  /// The type of an identifier in the given enclosing type or in a scope if it is a local variable.
+  public func type(of identifier: String, enclosingType: RawTypeIdentifier, scopeContext: ScopeContext? = nil) -> RawType {
+
+    // Type of property
+    if let type = types[enclosingType]?.properties[identifier]?.rawType {
       return type
     }
 
-    if let function = types[enclosingType]?.functions[property]?.first! {
+    // Type of container
+    if isStructDeclared(identifier) || isContractDeclared(identifier) {
+      return .userDefinedType(identifier)
+    }
+    
+    // Type of a function
+    if let function = types[enclosingType]?.functions[identifier]?.first! {
       return .functionType(parameters: function.parameterTypes, result: function.resultType)
     }
 
-    guard let scopeContext = scopeContext, let type = scopeContext.type(for: property) else { return .errorType }
+    // Type of local variable
+    guard let scopeContext = scopeContext, let type = scopeContext.type(for: identifier) else { return .errorType }
     return type
   }
 
   /// The type return type of a function call, determined by looking up the function's declaration.
   public func type(of functionCall: FunctionCall, enclosingType: RawTypeIdentifier, typeStates: [TypeState], callerCapabilities: [CallerCapability], scopeContext: ScopeContext) -> RawType? {
+
+    // IR functions should be compatible with all types
+    guard !Environment.isIRFunctionCall(functionCall) else {
+      return .any
+    }
+
     let match = matchFunctionCall(functionCall, enclosingType: enclosingType, typeStates: typeStates, callerCapabilities: callerCapabilities, scopeContext: scopeContext)
 
     switch match {

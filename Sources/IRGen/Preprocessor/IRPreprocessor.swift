@@ -69,18 +69,20 @@ public struct IRPreprocessor: ASTPass {
       let weiType = Identifier(identifierToken: Token(kind: .identifier("Wei"), sourceLocation: payableParameterIdentifier.sourceLocation))
       let variableDeclaration = VariableDeclaration(modifiers: [], declarationToken: nil, identifier: payableParameterIdentifier, type: Type(identifier: weiType))
       let closeBracketToken = Token(kind: .punctuation(.closeBracket), sourceLocation: payableParameterIdentifier.sourceLocation)
-      let wei = FunctionCall(identifier: weiType, arguments: [FunctionArgument(identifier: nil, expression: .rawAssembly(IRRuntimeFunction.callvalue(), resultType: .basicType(.int)))], closeBracketToken: closeBracketToken, isAttempted: false)
+      let wei = FunctionCall(identifier: weiType, arguments: [FunctionArgument(identifier: nil, expression: .rawAssembly("callvalue()", resultType: .basicType(.int)))], closeBracketToken: closeBracketToken, isAttempted: false)
       let equal = Token(kind: .punctuation(.equal), sourceLocation: payableParameterIdentifier.sourceLocation)
       let assignment: Expression = .binaryExpression(BinaryExpression(lhs: .variableDeclaration(variableDeclaration), op: equal, rhs: .functionCall(wei)))
       functionDeclaration.body.insert(.expression(assignment), at: 0)
     }
 
-    if let structDeclarationContext = passContext.structDeclarationContext {
-      if Environment.globalFunctionStructName != passContext.enclosingTypeIdentifier?.name {
+    // If it operates on a dynamic type (a non-global initalised struct), pass the receiver as the first parameter.
+    if let structDeclarationContext = passContext.structDeclarationContext,
+      let enclosingName = passContext.enclosingTypeIdentifier?.name,
+      Environment.globalFunctionStructName != enclosingName,
+      !passContext.environment!.initializers(in: enclosingName).isEmpty {
         // For struct functions, add `flintSelf` to the beginning of the parameters list.
         let parameter = constructParameter(name: "flintSelf", type: .inoutType(.userDefinedType(structDeclarationContext.structIdentifier.name)), sourceLocation: functionDeclaration.sourceLocation)
         functionDeclaration.parameters.insert(parameter, at: 0)
-      }
     }
 
     // Add an isMem parameter for each struct parameter.
